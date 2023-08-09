@@ -151,6 +151,37 @@ class NginxConfig:
         else:
             root.append(item)
 
+
+    def append_value(self, path, rule, data=None):
+        if not path:
+            raise ValueError("Path should not be empty.")
+
+        if data is None:
+            data = self.data
+
+        current_key = path[0]
+
+        for elem in data:
+            if isinstance(elem, dict):
+                # 如果當前的key帶有空格，我們將其拆分為名稱和參數
+                if " " in current_key:
+                    key_name, key_param = current_key.split(" ", 1)
+                else:
+                    key_name, key_param = current_key, None
+
+                if elem['name'] == key_name and (not key_param or elem.get('param') == key_param):
+                    if len(path) == 1:
+                        elem['value'].append(rule)
+                        return
+                    else:
+                        return self.append_value(path[1:], rule, elem['value'])
+
+        raise KeyError(f"Unable to find the specified path: {current_key}")
+
+
+
+
+
     def remove(self, item_arr, data=[]):
         if data == []:
             data = self.data
@@ -247,68 +278,44 @@ class NginxConfig:
             self.i += 1
         return data
 
-    # def gen_block(self, blocks, offset):
-    #     subrez = '' # ready to return string
-    #     block_name = None
-    #     block_param = ''
-    #     for i, block in enumerate(blocks):
-    #         if isinstance(block, tuple):
-    #             if len(block) == 1 and type(block[0]) == str: #single param
-    #                 subrez += self.off_char * offset + '%s;\n' % (block[0])
-    #             elif isinstance(block[1], str):
-    #                 subrez += self.off_char * offset + '%s %s;\n' % (block[0], block[1])
-    #             else: #multiline
-    #                 subrez += self.off_char * offset + '%s %s;\n' % (block[0],
-    #                     self.gen_block(block[1], offset + len(block[0]) + 1))
-
-    #         elif isinstance(block, dict):
-    #             block_value = self.gen_block(block['value'], offset + 4)
-    #             if block['param']:
-    #                 param = block['param'] + ' '
-    #             else:
-    #                 param = ''
-    #             if subrez != '':
-    #                 subrez += '\n'
-    #             subrez += '%(offset)s%(name)s %(param)s{\n%(data)s%(offset)s}\n' % {
-    #                 'offset':self.off_char * offset, 'name':block['name'], 'data':block_value,
-    #                 'param':param}
-
-    #         elif isinstance(block, str): #multiline params
-    #             if i == 0:
-    #                 subrez += '%s\n' % block
-    #             else:
-    #                 subrez += '%s%s\n' % (self.off_char * offset, block)
-
-    #     if block_name:
-    #         return '%(offset)s%(name)s %(param)s{\n%(data)s%(offset)s}\n' % {
-    #             'offset':self.off_char * offset, 'name':block_name, 'data':subrez,
-    #             'param':block_param}
-    #     else:
-    #         return subrez
-
     def gen_block(self, blocks, offset):
-        subrez = ''  # ready to return string
-        for block in blocks:
-            if isinstance(block, tuple):  # Command line in nginx configuration
-                if len(block) == 1 and type(block[0]) == str:  # single param
+        subrez = '' # ready to return string
+        block_name = None
+        block_param = ''
+        for i, block in enumerate(blocks):
+            if isinstance(block, tuple):
+                if len(block) == 1 and type(block[0]) == str: #single param
                     subrez += self.off_char * offset + '%s;\n' % (block[0])
-                else:
+                elif isinstance(block[1], str):
                     subrez += self.off_char * offset + '%s %s;\n' % (block[0], block[1])
+                else: #multiline
+                    subrez += self.off_char * offset + '%s %s;\n' % (block[0],
+                        self.gen_block(block[1], offset + len(block[0]) + 1))
 
-            elif isinstance(block, dict):  # Block command like server, location, etc.
+            elif isinstance(block, dict):
                 block_value = self.gen_block(block['value'], offset + 4)
                 if block['param']:
-                    param = ' ' + block['param']
+                    param = block['param'] + ' '
                 else:
                     param = ''
+                if subrez != '':
+                    subrez += '\n'
+                subrez += '%(offset)s%(name)s %(param)s{\n%(data)s%(offset)s}\n' % {
+                    'offset':self.off_char * offset, 'name':block['name'], 'data':block_value,
+                    'param':param}
 
-                subrez += self.off_char * offset + '%s%s {\n%s%s}\n' % (
-                    block['name'], param, block_value, self.off_char * offset)
+            elif isinstance(block, str): #multiline params
+                if i == 0:
+                    subrez += '%s\n' % block
+                else:
+                    subrez += '%s%s\n' % (self.off_char * offset, block)
 
-            elif isinstance(block, str):  # multiline params (less common)
-                subrez += '%s%s\n' % (self.off_char * offset, block)
-
-        return subrez
+        if block_name:
+            return '%(offset)s%(name)s %(param)s{\n%(data)s%(offset)s}\n' % {
+                'offset':self.off_char * offset, 'name':block_name, 'data':subrez,
+                'param':block_param}
+        else:
+            return subrez
 
     def gen_config(self, offset_char=' '):
         self.off_char = offset_char
