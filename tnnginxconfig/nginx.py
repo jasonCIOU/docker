@@ -28,7 +28,7 @@ class TN(NginxConfig):
                     return
         block['value'].append((rule_name, rule_value))
 
-    def add_rule_to_block(self, block_param, rule_name, rule_value):
+    def add_rule(self, block_param, rule_name, rule_value):
         try:
             server_block = self._find_server_block()
             if not server_block:
@@ -105,6 +105,6 @@ class TN(NginxConfig):
 if __name__ == '__main__':
     nc = TN()
     nc.loadf('./nginx.conf')
-    nc.add_rule_to_block("/nab/", "proxy_cache", "http://your_url_here")
-    nc.add_rule_to_block("server", "access_log", "/new/path/to/access.log")
+    nc.add_rule("/nab/", "proxy_cache", "http://your_url_here")
+    nc.add_rule("server", "access_log", "/new/path/to/access.log")
     nc.savef('./nginx_modified.conf')
